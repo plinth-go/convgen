@@ -1,0 +1,16 @@
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+bin/
+coverage.out
+coverage.*
+*.test
+*.prof
+*.tmp
+
+AGENTS.override.md
+.notes/

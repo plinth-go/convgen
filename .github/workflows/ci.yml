@@ -1,0 +1,78 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.22.x', 'stable']
+    env:
+      GOFLAGS: -mod=readonly
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      - name: Check
+        run: make check
+      - name: Race
+        run: make test-race
+      - name: Generated files
+        run: make generate-check
+      - name: Build
+        run: make build
+
+  module:
+    name: module (go 1.22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.22.x'
+          cache: true
+      - name: Verify checksums
+        run: go mod verify
+      - name: Tidy
+        run: go mod tidy
+      - name: Check module files
+        run: git diff --exit-code -- go.mod go.sum
+
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: true
+      - name: Verify DCO sign-offs
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          base=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          ./scripts/check-dco.sh "$base" HEAD
+      - name: Verify licenses and workflows
+        run: make quality
